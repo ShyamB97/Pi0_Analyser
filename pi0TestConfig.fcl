@@ -22,7 +22,7 @@ pi0_test_selection:
 
    BeamlineUtils:        @local::standard_protodunebeamlineutils
    momentum:				0.5
-   Pi0Only:    false
+   Pi0Only:    true
    AnalyseFromBeam:   true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
 

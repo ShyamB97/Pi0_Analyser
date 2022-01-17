@@ -49,7 +49,7 @@
 #include <TH1D.h>
 #include "Math/Vector3D.h"
 
-//Use this to get CNN numbers
+//Use this to get CNN output
 #include "lardata/ArtDataHelper/MVAReader.h"
 
 #include <algorithm>
@@ -121,7 +121,6 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   protoana::ProtoDUNETrackUtils trackUtil;
 
   // local variables
-  int nomialMomentum = 1;
   TTree *fOutTree = new TTree;
 
   // meta-data
@@ -244,9 +243,13 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<int> matchedG4DaughterPdg;
   std::vector<int> matchedG4ParentPdg;
 
+  std::vector<int> PFPNum;
+  std::vector<int> PFPMother;
+
   unsigned int eventID;
   unsigned int run;
   unsigned int subRun;
+  int beam;
 };
 
 
@@ -374,7 +377,7 @@ std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVARead
   }
   mean_em = (n > 0) ? ( mean_em / n ) : -999; // posts -999 if there were no hits
   mean_track = (n > 0) ? ( mean_track / n ) : -999;
-  score = (n > 0) ? (mean_em / mean_em + mean_track) : -999;
+  score = (n > 0) ? (mean_em / (mean_em + mean_track) ) : -999;
 
   output.push_back(score);
   output.push_back(mean_em);
@@ -504,6 +507,9 @@ void protoana::pi0TestSelection::reset()
 
   matchedG4DaughterPdg.clear();
   matchedG4ParentPdg.clear();
+
+  PFPNum.clear();
+  PFPMother.clear();
 }
 
 
@@ -513,66 +519,61 @@ void protoana::pi0TestSelection::CollectG4Particle(int pdg = 0)
     for(auto part = plist.begin(); part != plist.end(); part ++)
     {
       const simb::MCParticle* pPart = part->second;
-      if(pdg != 0)
+      // run if a specific particle is needed
+      if(pdg == pPart->PdgCode())
       {
-        if(pdg == pPart->PdgCode())
+        G4ParticlePdg.push_back(pPart->PdgCode());
+        G4ParticleEnergy.push_back(pPart->E());
+        G4ParticleMass.push_back(pPart->Mass());
+        
+        TLorentzVector StartPos = pPart->Position(0);
+        G4ParticleStartPosX.push_back(StartPos.X());
+        G4ParticleStartPosY.push_back(StartPos.Y());
+        G4ParticleStartPosZ.push_back(StartPos.Z());
+        
+        TLorentzVector EndPos = pPart->EndPosition();
+        G4ParticleEndPosX.push_back(EndPos.X());
+        G4ParticleEndPosY.push_back(EndPos.Y());
+        G4ParticleEndPosZ.push_back(EndPos.Z());
+
+        TLorentzVector momentum = pPart->Momentum();
+        G4ParticleMomX.push_back(momentum.X());
+        G4ParticleMomY.push_back(momentum.Y());
+        G4ParticleMomZ.push_back(momentum.Z());
+
+        G4ParticleNum.push_back(part->first);
+        G4ParticleMother.push_back(pPart->Mother());
+
+        std::cout << "number of Daughters: " << pPart->NumberDaughters() << std::endl;
+        auto daughter = plist.find(pPart->FirstDaughter())->second;
+        for (int i = pPart->FirstDaughter(); i < pPart->FirstDaughter() + pPart->NumberDaughters(); i++)
         {
-          G4ParticlePdg.push_back(pPart->PdgCode());
-          G4ParticleEnergy.push_back(pPart->E());
-          G4ParticleMass.push_back(pPart->Mass());
+          daughter = plist.find(i)->second;
+          G4ParticlePdg.push_back(daughter->PdgCode());
+          G4ParticleEnergy.push_back(daughter->E());
+          G4ParticleMass.push_back(daughter->Mass());
           
-          TLorentzVector StartPos = pPart->Position(0);
+          TLorentzVector StartPos = daughter->Position(0);
           G4ParticleStartPosX.push_back(StartPos.X());
           G4ParticleStartPosY.push_back(StartPos.Y());
           G4ParticleStartPosZ.push_back(StartPos.Z());
-          
-          TLorentzVector EndPos = pPart->EndPosition();
+
+          TLorentzVector EndPos = daughter->EndPosition();
           G4ParticleEndPosX.push_back(EndPos.X());
           G4ParticleEndPosY.push_back(EndPos.Y());
           G4ParticleEndPosZ.push_back(EndPos.Z());
-
-          TLorentzVector momentum = pPart->Momentum();
+          
+          TLorentzVector momentum = daughter->Momentum();
           G4ParticleMomX.push_back(momentum.X());
           G4ParticleMomY.push_back(momentum.Y());
           G4ParticleMomZ.push_back(momentum.Z());
 
-          G4ParticleNum.push_back(part->first);
-          G4ParticleMother.push_back(pPart->Mother());
-
-          std::cout << "number of Daughters: " << pPart->NumberDaughters() << std::endl;
-          auto daughter = plist.find(pPart->FirstDaughter())->second;
-          for (int i = pPart->FirstDaughter(); i < pPart->FirstDaughter() + pPart->NumberDaughters(); i++)
-          {
-            daughter = plist.find(i)->second;
-            G4ParticlePdg.push_back(daughter->PdgCode());
-            G4ParticleEnergy.push_back(daughter->E());
-            G4ParticleMass.push_back(daughter->Mass());
-            
-            TLorentzVector StartPos = daughter->Position(0);
-            G4ParticleStartPosX.push_back(StartPos.X());
-            G4ParticleStartPosY.push_back(StartPos.Y());
-            G4ParticleStartPosZ.push_back(StartPos.Z());
-
-            TLorentzVector EndPos = daughter->EndPosition();
-            G4ParticleEndPosX.push_back(EndPos.X());
-            G4ParticleEndPosY.push_back(EndPos.Y());
-            G4ParticleEndPosZ.push_back(EndPos.Z());
-            
-            TLorentzVector momentum = daughter->Momentum();
-            G4ParticleMomX.push_back(momentum.X());
-            G4ParticleMomY.push_back(momentum.Y());
-            G4ParticleMomZ.push_back(momentum.Z());
-
-            G4ParticleNum.push_back(i);
-            G4ParticleMother.push_back(daughter->Mother());
-          } 
-        }
-        else
-        {
-          continue;
+          G4ParticleNum.push_back(i);
+          G4ParticleMother.push_back(daughter->Mother());
         }
       }
-      else
+      // run if all particles are needed
+      if(pdg == 0)
       {
         G4ParticlePdg.push_back(pPart->PdgCode());
         G4ParticleEnergy.push_back(pPart->E());
@@ -586,6 +587,9 @@ void protoana::pi0TestSelection::CollectG4Particle(int pdg = 0)
         G4ParticleEndPosX.push_back(EndPos.X());
         G4ParticleEndPosY.push_back(EndPos.Y());
         G4ParticleEndPosZ.push_back(EndPos.Z());
+        
+        G4ParticleNum.push_back(part->first);
+        G4ParticleMother.push_back(pPart->Mother());
       }
     }
     std::cout << "number of G4 particles: " << plist.size() << std::endl;
@@ -608,7 +612,7 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
   // calculate cnn score
   std::vector<double> cnnOutput = CNNScoreCalculator(hitResults, collection_hits, num);
   CNNScore.push_back(cnnOutput[0]);
-  // also output the average and em track score to calculate it the way done in python
+  // also output the average and em track score to calculate it in python
   emScore.push_back(cnnOutput[1]);
   trackScore.push_back(cnnOutput[2]);
 
@@ -940,7 +944,6 @@ void protoana::pi0TestSelection::AnalyseFromBeam(art::Event const &evt, const de
       const recob::PFParticle * daughterPFP = &(pfpVec.at( daughterID ));
       AnalyseMCTruth(*daughterPFP, evt, clockData);
     }
-    CollectG4Particle(111);
   }
 }
 
@@ -974,12 +977,6 @@ void protoana::pi0TestSelection::AnalyseAllPFP(const art::Event &evt, const deti
   trueBeamEndPosX = -999;
   trueBeamEndPosX = -999;
   trueBeamEndPosX = -999;
-
-  
-  if(!evt.isRealData())
-  {
-    CollectG4Particle(111);
-  }
 }
 
 
@@ -995,6 +992,7 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("EventID", &eventID);
   fOutTree->Branch("totalEvents", &totalEvents);
   fOutTree->Branch("beamEvents", &beamEvents);
+  fOutTree->Branch("beamNum", &beam);
 
   // track-shower identification
   fOutTree->Branch("pandoraTag", &pandoraTags);
@@ -1106,21 +1104,30 @@ void protoana::pi0TestSelection::beginJob()
 
   fOutTree->Branch("g4_matched_daughter_pdg", &matchedG4DaughterPdg);
   fOutTree->Branch("g4_matched_parent_pdg", &matchedG4ParentPdg);
+
+  fOutTree->Branch("reco_PFP_ID", &PFPNum);
+  fOutTree->Branch("reco_PFP_Mother", &PFPMother);
+
 }
 
 
 void protoana::pi0TestSelection::analyze(art::Event const & evt)
 {
+  //-----------------------------------------------//
   std::cout << "module running..." << std::endl;
   reset(); // clear any outputs that are lists
-
+  
+  // print metadata
   run = evt.run();
   std::cout << "run: " << run << std::endl;
   subRun = evt.subRun();
   std::cout << "subrun: " << subRun << std::endl;
   eventID = evt.id().event();
   std::cout << "event: " << eventID << std::endl;
+  //-----------------------------------------------//
 
+  //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
+  // get various information needed to retrieve necessary data
   std::cout << "getting handle" << std::endl;
   art::ValidHandle<std::vector<recob::PFParticle> > pfpVec = evt.getValidHandle<std::vector<recob::PFParticle> >( fPFParticleTag ); // object to allow us to reference the PFParticles in the event
   std::cout << "number of PFParticles: " << pfpVec->size() << std::endl;
@@ -1132,7 +1139,9 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
   auto const detProp =  art::ServiceHandle<detinfo::DetectorPropertiesService>()->DataFor(evt, clockData); // object containing physical proteties of the detector
 
   anab::MVAReader<recob::Hit,4> hitResults(evt, "emtrkmichelid:emtrkmichel"); // info for CNN score calculation
+  //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
 
+  //-------------------------------------------------------------------------------------------//
   // checks beam event info from the generator and data, not used for particle gun tests
   if(!fPi0Only)
   {
@@ -1140,23 +1149,84 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
     try
     {
       auto beamHandle = evt.getValidHandle<std::vector<beam::ProtoDUNEBeamEvent>>("generator");
-
-        if( beamHandle.isValid())
-        {
-          art::fill_ptr_vector(beamVec, beamHandle);
-        }
+      if( beamHandle.isValid())
+      {
+        art::fill_ptr_vector(beamVec, beamHandle);
+      }
     }
     catch (const cet::exception &e)
     {
-        std::cout << "BeamEvent generator object not found, moving on" << std::endl;
-        return;
+      std::cout << "BeamEvent generator object not found, moving on" << std::endl;
+      return;
     }
   }
+  //-------------------------------------------------------------------------------------------//
 
-  // run main code
-  AnalyseFromBeam(evt, clockData, detProp, hitResults, *pfpVec);
+  // old main functions
+  //AnalyseFromBeam(evt, clockData, detProp, hitResults, *pfpVec);
   //std::cout << "analysing all PFP's" << std::endl;
   //AnalyseAllPFP(evt, clockData, detProp, hitResults, *pfpVec);
+
+  //-------------------------------------------------------------------------------------------------------------//
+  // Get an array of beam particles
+  std::vector<const recob::PFParticle*> beamParticles = pfpUtil.GetPFParticlesFromBeamSlice(evt, fPFParticleTag);
+  
+  beam = -999;
+  if(beamParticles.size() == 0)
+  {
+    std::cout << "no beam particle..." << std::endl;
+  }
+  else
+  {
+    beam = beamParticles[0]->Self();
+  }
+  if(beamParticles.size() > 1)
+  {
+    std::cout << "there shouldn't be more than one beam particle" << std::endl;
+  }
+  //-------------------------------------------------------------------------------------------------------------//
+
+  //-------------------------------------------------------------------------------------------------------------//
+  // main code
+  for(recob::PFParticle pfp : *pfpVec)
+  {
+    const int self = pfp.Self();
+    int parent = pfp.Parent();
+    // print some information for debugging
+    std::cout << "----------------------------------------" << std::endl;
+    std::cout << "PFP number: " << self << std::endl;
+    std::cout << "is primary? " << pfp.IsPrimary() << std::endl;
+    std::cout << "Number of daughters: " << pfp.NumDaughters() << std::endl;
+    if(self == beam)
+    {
+      std::cout << "beam particle: " << self << std::endl;
+    }
+
+    // make it clear that the particle has no parent
+    if(pfp.Parent() > pfpVec->size())
+    {
+      parent = -999;
+    }
+    
+    std::cout << "parent: " << parent << std::endl;
+
+    PFPNum.push_back(self);
+    PFPMother.push_back(parent);
+
+    AnalyseDaughterPFP(pfp, evt, detProp, hitResults);
+    if(!evt.isRealData())
+    {
+      AnalyseMCTruth(pfp, evt, clockData);
+    }
+    std::cout << "----------------------------------------" << std::endl;
+  }
+  
+  // Collect information from truth tables for pi0 particles only
+  if(!evt.isRealData())
+  {
+    CollectG4Particle();
+  }
+  //-------------------------------------------------------------------------------------------------------------//
 
   totalEvents++;
   fOutTree->Fill(); // fill the root tree with the outputs
