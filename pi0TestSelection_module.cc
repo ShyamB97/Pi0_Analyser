@@ -2,6 +2,8 @@
 // Class:       pi0TestSelection
 // Plugin Type: analyzer (art v2_07_03)
 // File:        pi0TestSelection_module.cc
+//TODO follow new calibration as done in PDSPAnalyser (after understanding current reconsturction)
+//? output raw CNN outputs?
 ////////////////////////////////////////////////////////////////////////
 
 #include "art/Framework/Core/EDAnalyzer.h"
@@ -42,7 +44,7 @@
 #include "protoduneana/Utilities/ProtoDUNECalibration.h"
 
 //dunetpc headers
-#include "dunetpc/dune/DuneObj/ProtoDUNEBeamEvent.h"
+#include "dune/DuneObj/ProtoDUNEBeamEvent.h"
 
 //ROOT includes
 #include <TTree.h>
