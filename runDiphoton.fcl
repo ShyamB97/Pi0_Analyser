@@ -1,12 +1,12 @@
-#include "services_dune.fcl"
-#include "ProtoDUNETruthBeamFilter.fcl"
 #include "filters.fcl"
 #include "triggeralgo_service.fcl"
 #include "ProtoDUNEBeamCuts.fcl"
 #include "ProtoDUNECalibration.fcl"
 #include "ProtoDUNEBeamlineUtils.fcl"
+#include "services_dune.fcl"
+#include "ProtoDUNETruthBeamFilter.fcl"
 
-BEGIN_PROLOG
+process_name: diphotonMC
 
 pi0_test_selection:
 {
@@ -18,13 +18,17 @@ pi0_test_selection:
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
    CalorimetryTagSCE:       "pandoracalinoxyzt"
-   Verbose:                 true
 
    SelectEvents: []
 
    BeamlineUtils:        @local::standard_protodunebeamlineutils
-   momentum:				1
    Pi0Only:    true
+   # Retrieve G4 determines what truth information should be accessed has 4 options:
+   # 0 : None
+   # 1 : PIO, only get truth information from pi0 decays and their daughters
+   # 2 : DIPHOTON, get the first two MC particles (and their daughters maybe?), only use when analysing diphoton MC.
+   # 3 : ALL, NOT RECOMMENDED as it retrieves all MC particles from the truth table, and resulting file sizes will be significantly larger.
+   RetrieveG4: 2
    AnalyseFromBeam:   true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
 
@@ -32,10 +36,6 @@ pi0_test_selection:
    #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
 
 }
-
-END_PROLOG
-
-process_name: pi0Test
 
 services:
 {
@@ -63,7 +63,7 @@ services.message.destinations.LogStandardOut.threshold: "INFO"
 services.SpaceCharge.EnableSimEfieldSCE: true
 services.SpaceCharge.EnableSimSpatialSCE: true
 services.SpaceCharge.EnableSimulationSCE: true
-#services.Geometry: @local::protodunev6_geo
+#services.Geometry: @local::dune10kt_1x2x6_v2_geo
 
 #source is now a root file
 source:
@@ -76,25 +76,14 @@ source:
 physics:
 {
 
- #filters: {
- #  fTruth: @local::beam_filter
- #}
-
- #fpath: [fTruth]
-
  analyzers:
  {
-  pduneana:          @local::pi0_test_selection
-  # beamtruth:        @local::ProtoDUNETruthBeamParticle_params
+  pduneana:           @local::pi0_test_selection
  }
 
- # ana2:  [ anaMod, beamtruth ]
  pi0Ana: [pduneana]
 
  end_paths:     [ pi0Ana ]
 }
 
 outputs: {}
-#physics.filters.fTruth.PDG: [211, -13, 2212]
-#physics.analyzers.pduneana.SelectEvents: ["fpath"]
-#services.ParticleInventoryService.ParticleInventory.EveIdCalculator: "EmEveIdCalculator"

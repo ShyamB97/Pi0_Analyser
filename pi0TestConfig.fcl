@@ -16,12 +16,10 @@ pi0_test_selection:
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
    CalorimetryTagSCE:       "pandoracalinoxyzt"
-   Verbose:                 true
 
    SelectEvents: []
 
    BeamlineUtils:        @local::standard_protodunebeamlineutils
-   momentum:				0.5
    Pi0Only:    true
    AnalyseFromBeam:   true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE

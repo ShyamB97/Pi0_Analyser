@@ -92,13 +92,16 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void AnalyseBeamPFP(const recob::PFParticle &beam, const art::Event &evt);
   void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorClocksData &clockData);
   void AnalyseMCTruthBeam(const art::Event &evt);
-  void CollectG4Particle(int Pdg);
+  void FillG4NTuple(const simb::MCParticle* &particle, const int &number);
+  void CollectG4Particle(const int &Pdg, const int start, const int stop);
 
   void AnalyseFromBeam(const art::Event &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec);
   void AnalyseAllPFP(const art::Event &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec);
 
   private:
-
+  
+  enum G4Mode{PI0=1, DIPHOTON=2, ALL=3, NONE=0}; // determines what MC particles are retrieved from the truth table
+  
   // fcl parameters, order matters!
   protoana::ProtoDUNECalibration calibration_SCE;
   std::string fCalorimetryTag;
@@ -107,13 +110,13 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::string fHitTag;
   std::string fPFParticleTag;
   std::string fGeneratorTag;
-  bool fVerbose;
   protoana::ProtoDUNEBeamlineUtils fBeamlineUtils; // get BeamLineUtils class... <consider removing>
   art::ServiceHandle<geo::Geometry> geom;
   art::ServiceHandle<cheat::BackTrackerService> bt_serv;
   art::ServiceHandle< cheat::ParticleInventoryService > pi_serv;
 
   bool fPi0Only;
+  G4Mode fRetrieveG4;
 
   //Initialise protodune analysis utility classes
   protoana::ProtoDUNEPFParticleUtils pfpUtil;
@@ -239,8 +242,8 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<double> G4ParticleMomZ;
 
 
-  std::vector<double> G4ParticleNum;
-  std::vector<double> G4ParticleMother;
+  std::vector<int> G4ParticleNum;
+  std::vector<int> G4ParticleMother;
 
   std::vector<int> matchedG4DaughterPdg;
   std::vector<int> matchedG4ParentPdg;
@@ -265,9 +268,9 @@ protoana::pi0TestSelection::pi0TestSelection(fhicl::ParameterSet const & p)
   fHitTag(p.get<std::string>("HitTag")),
   fPFParticleTag(p.get<std::string>("PFParticleTag")),
   fGeneratorTag(p.get<std::string>("GeneratorTag")),
-  fVerbose(p.get<bool>("Verbose")),
   fBeamlineUtils(p.get<fhicl::ParameterSet>("BeamlineUtils")),
-  fPi0Only(p.get<bool>("Pi0Only"))
+  fPi0Only(p.get<bool>("Pi0Only")),
+  fRetrieveG4(static_cast<G4Mode>(p.get<int>("RetrieveG4")))
 { }
 
 
@@ -514,84 +517,69 @@ void protoana::pi0TestSelection::reset()
   PFPMother.clear();
 }
 
+void protoana::pi0TestSelection::FillG4NTuple(const simb::MCParticle* &particle, const int &number)
+{
+  std::cout << "----------------------------------------" << std::endl;
+  std::cout << "number: " << number << std::endl;
+  std::cout << "PDG code: " << particle->PdgCode() << std::endl;
+  std::cout << "Energy: " << particle->E() << std::endl;
+  G4ParticlePdg.push_back(particle->PdgCode());
+  G4ParticleEnergy.push_back(particle->E());
+  G4ParticleMass.push_back(particle->Mass());
 
-void protoana::pi0TestSelection::CollectG4Particle(int pdg = 0)
+  TLorentzVector StartPos = particle->Position(0);
+  G4ParticleStartPosX.push_back(StartPos.X());
+  G4ParticleStartPosY.push_back(StartPos.Y());
+  G4ParticleStartPosZ.push_back(StartPos.Z());
+
+  TLorentzVector EndPos = particle->EndPosition();
+  G4ParticleEndPosX.push_back(EndPos.X());
+  G4ParticleEndPosY.push_back(EndPos.Y());
+  G4ParticleEndPosZ.push_back(EndPos.Z());
+
+  TLorentzVector momentum = particle->Momentum();
+  G4ParticleMomX.push_back(momentum.X());
+  G4ParticleMomY.push_back(momentum.Y());
+  G4ParticleMomZ.push_back(momentum.Z());
+
+  G4ParticleNum.push_back(number);
+  G4ParticleMother.push_back(particle->Mother());
+}
+
+void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int start=-1, const int stop=-1)
 {
     const sim::ParticleList & plist = pi_serv->ParticleList();
+
     for(auto part = plist.begin(); part != plist.end(); part ++)
     {
+      // don't compute anything till the start point
+      if(part->first < start)
+      {
+        continue;
+      }
+      // finish once we process the last particle
+      if(part->first > stop)
+      {
+        std::cout << "finished at: " << part->first << std::endl;
+        break;
+      }
       const simb::MCParticle* pPart = part->second;
       // run if a specific particle is needed
       if(pdg == pPart->PdgCode())
       {
-        G4ParticlePdg.push_back(pPart->PdgCode());
-        G4ParticleEnergy.push_back(pPart->E());
-        G4ParticleMass.push_back(pPart->Mass());
-        
-        TLorentzVector StartPos = pPart->Position(0);
-        G4ParticleStartPosX.push_back(StartPos.X());
-        G4ParticleStartPosY.push_back(StartPos.Y());
-        G4ParticleStartPosZ.push_back(StartPos.Z());
-        
-        TLorentzVector EndPos = pPart->EndPosition();
-        G4ParticleEndPosX.push_back(EndPos.X());
-        G4ParticleEndPosY.push_back(EndPos.Y());
-        G4ParticleEndPosZ.push_back(EndPos.Z());
-
-        TLorentzVector momentum = pPart->Momentum();
-        G4ParticleMomX.push_back(momentum.X());
-        G4ParticleMomY.push_back(momentum.Y());
-        G4ParticleMomZ.push_back(momentum.Z());
-
-        G4ParticleNum.push_back(part->first);
-        G4ParticleMother.push_back(pPart->Mother());
+        FillG4NTuple(pPart, part->first);
 
         std::cout << "number of Daughters: " << pPart->NumberDaughters() << std::endl;
-        auto daughter = plist.find(pPart->FirstDaughter())->second;
         for (int i = pPart->FirstDaughter(); i < pPart->FirstDaughter() + pPart->NumberDaughters(); i++)
         {
-          daughter = plist.find(i)->second;
-          G4ParticlePdg.push_back(daughter->PdgCode());
-          G4ParticleEnergy.push_back(daughter->E());
-          G4ParticleMass.push_back(daughter->Mass());
-          
-          TLorentzVector StartPos = daughter->Position(0);
-          G4ParticleStartPosX.push_back(StartPos.X());
-          G4ParticleStartPosY.push_back(StartPos.Y());
-          G4ParticleStartPosZ.push_back(StartPos.Z());
-
-          TLorentzVector EndPos = daughter->EndPosition();
-          G4ParticleEndPosX.push_back(EndPos.X());
-          G4ParticleEndPosY.push_back(EndPos.Y());
-          G4ParticleEndPosZ.push_back(EndPos.Z());
-          
-          TLorentzVector momentum = daughter->Momentum();
-          G4ParticleMomX.push_back(momentum.X());
-          G4ParticleMomY.push_back(momentum.Y());
-          G4ParticleMomZ.push_back(momentum.Z());
-
-          G4ParticleNum.push_back(i);
-          G4ParticleMother.push_back(daughter->Mother());
+          const simb::MCParticle* daughter = plist.find(i)->second;
+          FillG4NTuple(daughter, i);
         }
       }
       // run if all particles are needed
       if(pdg == 0)
       {
-        G4ParticlePdg.push_back(pPart->PdgCode());
-        G4ParticleEnergy.push_back(pPart->E());
-        G4ParticleMass.push_back(pPart->Mass());
-        TLorentzVector StartPos = pPart->Position(0);
-        TLorentzVector EndPos = pPart->EndPosition();
-        G4ParticleStartPosX.push_back(StartPos.X());
-        G4ParticleStartPosY.push_back(StartPos.Y());
-        G4ParticleStartPosZ.push_back(StartPos.Z());
-
-        G4ParticleEndPosX.push_back(EndPos.X());
-        G4ParticleEndPosY.push_back(EndPos.Y());
-        G4ParticleEndPosZ.push_back(EndPos.Z());
-        
-        G4ParticleNum.push_back(part->first);
-        G4ParticleMother.push_back(pPart->Mother());
+        FillG4NTuple(pPart, part->first);
       }
     }
     std::cout << "number of G4 particles: " << plist.size() << std::endl;
@@ -1223,10 +1211,34 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
     std::cout << "----------------------------------------" << std::endl;
   }
   
-  // Collect information from truth tables for pi0 particles only
+  // Collect information from truth tables depending on which reco files are analysed.
   if(!evt.isRealData())
   {
-    CollectG4Particle();
+    switch (fRetrieveG4)
+    {
+    case ALL:
+      std::cout << "Retreiving ALL MCParticles" << std::endl;
+      CollectG4Particle();
+      break;
+    
+    case PI0:
+      std::cout << "Retreiving all pi0 MCParticles + daughters" << std::endl;
+      CollectG4Particle(111);
+      break;
+    
+    case DIPHOTON:
+      std::cout << "Retreiving photons 0 and 1 + daughters" << std::endl;
+      CollectG4Particle(22, 0, 2);
+      break;
+
+    case NONE:
+      std::cout << "Retreiving no MCParticles from particle list" << std::endl;
+      break;
+
+    default:
+      std::cout << "Retreiving no MCParticles from particle list" << std::endl;
+      break;
+    }
   }
   //-------------------------------------------------------------------------------------------------------------//
 
