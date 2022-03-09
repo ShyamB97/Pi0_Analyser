@@ -553,12 +553,12 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
     for(auto part = plist.begin(); part != plist.end(); part ++)
     {
       // don't compute anything till the start point
-      if(part->first < start)
+      if(start > -1 && part->first < start)
       {
         continue;
       }
       // finish once we process the last particle
-      if(part->first > stop)
+      if(stop > -1 && part->first > stop)
       {
         std::cout << "finished at: " << part->first << std::endl;
         break;
